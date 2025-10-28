@@ -15,17 +15,6 @@
         font-family: "Inter", sans-serif;
         background-color: #1f2937; /* Gray-800 */
       }
-      /* 定制滚动条外观 */
-      .scrolling-content::-webkit-scrollbar {
-        width: 8px;
-      }
-      .scrolling-content::-webkit-scrollbar-thumb {
-        background-color: #4b5563; /* Gray-600 */
-        border-radius: 4px;
-      }
-      .scrolling-content::-webkit-scrollbar-track {
-        background: #374151; /* Gray-700 */
-      }
       /* 提词器内容区域，实现全屏居中阅读效果 */
       #teleprompter-display {
         position: relative;
@@ -45,8 +34,44 @@
         #teleprompter-display {
           height: calc(100vh - 150px);
         }
+        /* 隐藏主体内容的容器，避免在全屏时滚动 */
+        .overflow-hidden {
+          overflow: hidden;
+        }
       }
       /* ================================== */
+
+      /* === NEW: 全屏模式样式 === */
+      .is-fullscreen {
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        bottom: 0 !important;
+        width: 100vw !important;
+        height: 100vh !important;
+        z-index: 50; /* Needs to be high enough to cover everything */
+        border-radius: 0 !important;
+        border: none !important;
+        padding: 0 !important; /* Remove container padding */
+      }
+
+      .is-fullscreen #script-content-wrapper {
+        /* 确保内容在全屏时能使用全高 */
+        height: 100vh !important;
+      }
+
+      /* 定制滚动条外观 */
+      .scrolling-content::-webkit-scrollbar {
+        width: 8px;
+      }
+      .scrolling-content::-webkit-scrollbar-thumb {
+        background-color: #4b5563; /* Gray-600 */
+        border-radius: 4px;
+      }
+      .scrolling-content::-webkit-scrollbar-track {
+        background: #374151; /* Gray-700 */
+      }
 
       /* 用于定位居中线 */
       #center-line {
@@ -130,6 +155,35 @@
         <div id="recognition-hint" class="recognition-hint">
           正在听... 请说当前段落
         </div>
+
+        <!-- NEW: 全屏模式下的中心控制图标 -->
+        <div
+          id="fs-overlay-controls"
+          class="hidden absolute inset-0 z-50 justify-center items-center pointer-events-none"
+        >
+          <div
+            class="p-4 rounded-full bg-gray-900/60 text-white shadow-2xl transition-opacity duration-300"
+          >
+            <!-- Pause Icon (Default: Visible when scrolling) -->
+            <svg
+              id="fs-pause-icon"
+              class="w-16 h-16 sm:w-20 sm:h-20"
+              fill="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
+            </svg>
+            <!-- Play Icon (Default: Hidden when scrolling) -->
+            <svg
+              id="fs-play-icon"
+              class="w-16 h-16 sm:w-20 sm:h-20 hidden"
+              fill="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path d="M8 5v14l11-7z" />
+            </svg>
+          </div>
+        </div>
       </div>
 
       <!-- 状态和提示信息 -->
@@ -141,7 +195,7 @@
       </div>
 
       <!-- 控制面板 -->
-      <div class="bg-gray-800 p-4 rounded-xl mt-6 shadow-lg">
+      <div id="control-panel" class="bg-gray-800 p-4 rounded-xl mt-6 shadow-lg">
         <div class="flex flex-wrap justify-between items-center gap-4 mb-4">
           <!-- 模式切换按钮 -->
           <button
@@ -149,6 +203,14 @@
             class="flex-1 min-w-[120px] px-4 py-2 rounded-lg font-semibold transition duration-200 bg-yellow-600 hover:bg-yellow-500 text-gray-900 shadow-md"
           >
             切换到 语音模式
+          </button>
+
+          <!-- NEW: 全屏按钮 -->
+          <button
+            id="fullscreen-btn"
+            class="flex-1 min-w-[120px] px-4 py-2 rounded-lg font-semibold transition duration-200 bg-blue-600 hover:bg-blue-500 text-white shadow-md"
+          >
+            全屏显示
           </button>
 
           <!-- NEW: 镜像功能按钮 -->
@@ -312,11 +374,13 @@
       let isScrolling = false;
       let isVoiceMode = false;
       let isMirrored = false; // NEW: 镜像状态
+      let isFullscreen = false; // NEW: 全屏状态
       let recognition = null;
       let scriptSegments = [];
       let currentSegmentIndex = 0;
 
       // DOM 元素
+      const mainContainer = document.querySelector(".container");
       const display = document.getElementById("script-content-wrapper");
       const input = document.getElementById("script-input");
       const startStopBtn = document.getElementById("start-stop-btn");
@@ -331,7 +395,11 @@
       const paragraphValue = document.getElementById("paragraph-value");
       const lineHeightInput = document.getElementById("line-height-control");
       const lineHeightValue = document.getElementById("line-height-value");
-      const mirrorToggleBtn = document.getElementById("mirror-toggle-btn"); // NEW
+      const mirrorToggleBtn = document.getElementById("mirror-toggle-btn");
+      const fullscreenBtn = document.getElementById("fullscreen-btn"); // NEW
+      const fsOverlayControls = document.getElementById("fs-overlay-controls"); // NEW
+      const fsPauseIcon = document.getElementById("fs-pause-icon"); // NEW
+      const fsPlayIcon = document.getElementById("fs-play-icon"); // NEW
 
       const statusMessage = document.getElementById("status-message");
       const modeToggleBtn = document.getElementById("mode-toggle-btn");
@@ -362,7 +430,7 @@
           div.style.marginBottom = `${currentParagraphSpacing}px`;
           div.style.lineHeight = currentLineHeight;
 
-          // NEW: 如果当前处于镜像状态，新渲染的段落也要翻转回来
+          // 如果当前处于镜像状态，新渲染的段落也要翻转回来
           if (isMirrored) {
             div.style.transform = "scaleX(-1)";
           }
@@ -427,6 +495,20 @@
         return true;
       }
 
+      /**
+       * NEW: 更新全屏模式下的暂停/播放图标
+       */
+      function updateFullscreenIcons() {
+        if (!isFullscreen) return;
+        if (isScrolling) {
+          fsPauseIcon.classList.remove("hidden");
+          fsPlayIcon.classList.add("hidden");
+        } else {
+          fsPauseIcon.classList.add("hidden");
+          fsPlayIcon.classList.remove("hidden");
+        }
+      }
+
       // --- 核心模式逻辑：手动滚动 ---
 
       function startScroll() {
@@ -435,6 +517,9 @@
         startStopBtn.innerText = "暂停滚动";
         startStopBtn.classList.remove("bg-green-600", "hover:bg-green-500");
         startStopBtn.classList.add("bg-orange-600", "hover:bg-orange-500");
+
+        // NEW: 更新全屏图标
+        updateFullscreenIcons();
 
         const speed = parseFloat(speedInput.value); // 像素/帧
 
@@ -458,6 +543,9 @@
         startStopBtn.innerText = "启动滚动";
         startStopBtn.classList.remove("bg-orange-600", "hover:bg-orange-500");
         startStopBtn.classList.add("bg-green-600", "hover:bg-green-500");
+
+        // NEW: 更新全屏图标
+        updateFullscreenIcons();
       }
 
       // --- 核心模式逻辑：语音智能推进 ---
@@ -526,6 +614,8 @@
         isVoiceMode = true;
         startStopBtn.disabled = true; // 语音模式下禁用手动启动按钮
         speedInput.disabled = true;
+        // NEW: 语音模式下禁止全屏
+        fullscreenBtn.disabled = true;
 
         modeToggleBtn.innerText = "切换到 手动模式";
         modeToggleBtn.classList.remove("bg-yellow-600", "hover:bg-yellow-500");
@@ -545,6 +635,8 @@
         isVoiceMode = false;
         startStopBtn.disabled = scriptSegments.length === 0;
         speedInput.disabled = false;
+        // NEW: 退出语音模式后启用全屏
+        fullscreenBtn.disabled = false;
 
         modeToggleBtn.innerText = "切换到 语音模式";
         modeToggleBtn.classList.remove("bg-purple-600", "hover:bg-purple-500");
@@ -599,7 +691,7 @@
       }
 
       /**
-       * NEW: 切换镜像状态
+       * 切换镜像状态
        */
       function toggleMirroring() {
         isMirrored = !isMirrored;
@@ -628,6 +720,73 @@
         }
       }
 
+      /**
+       * NEW: 切换全屏状态
+       */
+      function toggleFullscreen() {
+        isFullscreen = !isFullscreen;
+
+        if (isFullscreen) {
+          // 禁用语音模式，防止冲突
+          if (isVoiceMode) stopVoiceControl();
+
+          // 隐藏所有非显示区元素
+          document.body.classList.add("overflow-hidden");
+          mainContainer.classList.add("hidden");
+
+          // 提词器显示区进入全屏
+          document
+            .getElementById("teleprompter-display")
+            .classList.add("is-fullscreen");
+
+          // 显示全屏控制层
+          fsOverlayControls.classList.remove("hidden");
+          fsOverlayControls.classList.add("flex");
+
+          // 切换按钮文字
+          fullscreenBtn.innerText = "退出全屏";
+
+          // 更新全屏图标状态
+          updateFullscreenIcons();
+        } else {
+          // 退出全屏
+          document.body.classList.remove("overflow-hidden");
+          mainContainer.classList.remove("hidden");
+
+          document
+            .getElementById("teleprompter-display")
+            .classList.remove("is-fullscreen");
+
+          // 隐藏全屏控制层
+          fsOverlayControls.classList.add("hidden");
+          fsOverlayControls.classList.remove("flex");
+
+          // 切换按钮文字
+          fullscreenBtn.innerText = "全屏显示";
+
+          // 退出全屏时停止滚动
+          stopScroll();
+          startStopBtn.disabled = scriptSegments.length === 0;
+        }
+      }
+
+      /**
+       * NEW: 全屏模式下的点击事件处理 (暂停/播放)
+       */
+      function handleFullscreenClick() {
+        if (isFullscreen && !isVoiceMode) {
+          // 切换 scroll 状态
+          if (isScrolling) {
+            stopScroll();
+          } else {
+            // 仅当有脚本内容时才能启动
+            if (scriptSegments.length > 0) {
+              startScroll();
+            }
+          }
+        }
+      }
+
       // --- 事件监听 ---
 
       // 模式切换
@@ -635,6 +794,11 @@
         if (isVoiceMode) {
           stopVoiceControl();
         } else {
+          // 语音模式与全屏滚动互斥
+          if (isFullscreen) {
+            statusMessage.innerText = "⚠️ 请先退出全屏，再切换到语音模式。";
+            return;
+          }
           startVoiceControl();
         }
       });
@@ -645,8 +809,30 @@
         isScrolling ? stopScroll() : startScroll();
       });
 
-      // NEW: 镜像切换
+      // 镜像切换
       mirrorToggleBtn.addEventListener("click", toggleMirroring);
+
+      // NEW: 全屏切换
+      fullscreenBtn.addEventListener("click", () => {
+        if (isVoiceMode) {
+          statusMessage.innerText =
+            "⚠️ 语音模式下无法进入全屏滚动模式。请先切换到手动模式。";
+          return;
+        }
+        toggleFullscreen();
+      });
+
+      // NEW: 全屏模式下点击提词器区域实现暂停/播放
+      document
+        .getElementById("teleprompter-display")
+        .addEventListener("click", handleFullscreenClick);
+
+      // NEW: 监听 Esc 键退出全屏
+      document.addEventListener("keydown", (e) => {
+        if (isFullscreen && e.key === "Escape") {
+          toggleFullscreen();
+        }
+      });
 
       // 重置按钮
       resetBtn.addEventListener("click", () => {
@@ -685,10 +871,10 @@
         fontValue.innerText = `${fontInput.value}px`;
         document.querySelectorAll(".script-segment").forEach((el) => {
           el.style.fontSize = `${fontInput.value}px`;
-          // NEW: 确保字体大小变化后，镜像样式保持
+          // 确保字体大小变化后，镜像样式保持
           if (isMirrored) el.style.transform = "scaleX(-1)";
         });
-        updateActiveSegment(); // 重新居中，防止字体变化导致位置偏移
+        // 不必调用 updateActiveSegment，因为它会触发一次额外的滚动
       });
 
       // 文本边距变化 (Horizontal Padding)
