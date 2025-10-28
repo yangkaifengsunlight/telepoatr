@@ -94,15 +94,16 @@
         /* 初始水平边距将在JS中设置 */
         transition: transform 0.3s ease-out; /* 平滑过渡镜像效果 */
       }
-      /* 脚本段落样式 */
+      /* 脚本段落样式 - 现在用于每一行 */
       .script-segment {
-        transition: color 0.3s, transform 0.3s;
+        transition: color 0.3s, transform 0.3s, opacity 0.3s;
         text-align: center;
       }
-      /* 激活段落样式 */
+      /* 激活段落/行样式 */
       .active-segment {
         color: #fcd34d !important; /* Amber-300 */
         transform: scale(1.05);
+        font-weight: 700 !important;
       }
       /* 识别提示样式 */
       .recognition-hint {
@@ -159,7 +160,7 @@
           正在听... 请说当前段落
         </div>
 
-        <!-- NEW: 全屏模式下的中心控制图标 -->
+        <!-- NEW: 全屏模式下的中心控制图标 (Play/Pause) -->
         <div
           id="fs-overlay-controls"
           class="hidden absolute inset-0 z-50 justify-center items-center pointer-events-none"
@@ -187,6 +188,28 @@
             </svg>
           </div>
         </div>
+
+        <!-- NEW: 推出全屏按钮 (固定在右上角) -->
+        <button
+          id="exit-fs-btn"
+          class="hidden absolute top-4 right-4 z-50 p-2 rounded-full bg-gray-700/70 text-white hover:bg-gray-600/90 transition-opacity pointer-events-auto shadow-lg"
+        >
+          <!-- X Icon -->
+          <svg
+            class="w-6 h-6"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M6 18L18 6M6 6l12 12"
+            ></path>
+          </svg>
+        </button>
       </div>
 
       <!-- NEW: 底部控制和状态信息包裹层，用于全屏时隐藏 -->
@@ -351,7 +374,7 @@
             <label
               for="script-input"
               class="block text-sm font-medium text-gray-300"
-              >演讲稿内容 (段落间请用空行分隔)</label
+              >演讲稿内容 (请按换行键分隔行)</label
             >
             <!-- 适配横屏和桌面：默认高 6rem (h-24)，中等屏幕以上高 9rem (md:h-36) -->
             <textarea
@@ -359,17 +382,23 @@
               class="w-full h-24 md:h-36 p-2 mt-1 rounded-lg bg-gray-700 text-gray-200 focus:ring-primary focus:border-primary border border-gray-600"
             >
 各位观众大家好，欢迎来到今天的分享会。
-信息时代，我们常被数字世界的混乱所困扰。你是不是也常被电脑、手机、网盘里的文件搞得焦头烂额？明明保存过的东西，偏偏急用时翻遍全网都找不到？
+
+信息时代，我们常被数字世界的混乱所困扰。
+你是不是也常被电脑、手机、网盘里的文件搞得焦头烂额？
+明明保存过的东西，偏偏急用时翻遍全网都找不到？
 
 别急，今天我要给你分享一个超简单的方法——PARA！
 只需要4个文件夹，就能让你的数字生活瞬间变清爽，找东西再也不抓狂。
+
 项目（Projects）放你眼下正在忙的事。
 领域（Areas）放你生活中需要持续关注的大块领域。
 资源（Resources）放你感兴趣或正在学习的知识库。
 归档（Archives）放过去完成或暂时用不上的东西。
 
-对，就是这么简单！这四个文件夹，涵盖了你数字生活的所有东西。工作任务、个人兴趣，PARA都能帮你分得清清楚楚。
-我自己试了以后，真的有种“救命啊终于找到组织神器”的感觉！试一次，你就知道有多爽！
+对，就是这么简单！这四个文件夹，涵盖了你数字生活的所有东西。
+工作任务、个人兴趣，PARA都能帮你分得清清楚楚。
+我自己试了以后，真的有种“救命啊终于找到组织神器”的感觉！
+试一次，你就知道有多爽！
 感谢大家的收听，期待与你下期再见！peace～
                     </textarea
             >
@@ -384,18 +413,17 @@
       let scrollInterval = null;
       let isScrolling = false;
       let isVoiceMode = false;
-      let isMirrored = false; // NEW: 镜像状态
-      let isFullscreen = false; // NEW: 全屏状态
+      let isMirrored = false;
+      let isFullscreen = false;
       let recognition = null;
-      let scriptSegments = [];
-      let currentSegmentIndex = 0;
+      let scriptSegments = []; // 现在存储的是每一行
+      let currentSegmentIndex = 0; // 现在代表当前行索引
 
       // DOM 元素
-      // const mainContainer = document.querySelector('.container'); // REMOVED: No longer needed to hide the main container
-      const headerWrapper = document.getElementById("header-wrapper"); // NEW: 标题和控制按钮上部
+      const headerWrapper = document.getElementById("header-wrapper");
       const bottomControlsWrapper = document.getElementById(
         "bottom-controls-wrapper"
-      ); // NEW: 状态和控制按钮下部
+      );
       const display = document.getElementById("script-content-wrapper");
       const input = document.getElementById("script-input");
       const startStopBtn = document.getElementById("start-stop-btn");
@@ -411,10 +439,11 @@
       const lineHeightInput = document.getElementById("line-height-control");
       const lineHeightValue = document.getElementById("line-height-value");
       const mirrorToggleBtn = document.getElementById("mirror-toggle-btn");
-      const fullscreenBtn = document.getElementById("fullscreen-btn"); // NEW
-      const fsOverlayControls = document.getElementById("fs-overlay-controls"); // NEW
-      const fsPauseIcon = document.getElementById("fs-pause-icon"); // NEW
-      const fsPlayIcon = document.getElementById("fs-play-icon"); // NEW
+      const fullscreenBtn = document.getElementById("fullscreen-btn");
+      const fsOverlayControls = document.getElementById("fs-overlay-controls");
+      const fsPauseIcon = document.getElementById("fs-pause-icon");
+      const fsPlayIcon = document.getElementById("fs-play-icon");
+      const exitFsBtn = document.getElementById("exit-fs-btn");
 
       const statusMessage = document.getElementById("status-message");
       const modeToggleBtn = document.getElementById("mode-toggle-btn");
@@ -423,29 +452,42 @@
       // --- 辅助函数 ---
 
       /**
-       * 渲染脚本到提词器显示区
+       * 渲染脚本到提词器显示区 (现在是按行分割)
        */
       function renderScript() {
-        const text = input.value;
-        // 使用两个或多个换行符来分隔段落
-        const segments = text.split(/\n\s*\n/).filter((s) => s.trim() !== "");
-        scriptSegments = segments.map((s) => s.trim());
+        const lines = input.value.split("\n");
+        scriptSegments = lines;
 
         display.innerHTML = "";
         const currentParagraphSpacing = paragraphInput.value;
         const currentLineHeight = lineHeightInput.value;
+        const lineVPadding = "8px"; // 垂直内边距，使高亮效果更明显
 
         scriptSegments.forEach((segment, index) => {
           const div = document.createElement("div");
+          // 如果是空行，用 &nbsp; 保持空间，并用作段落分隔
+          const content = segment.trim() === "" ? "&nbsp;" : segment.trim();
+
           div.className =
             "script-segment text-2xl md:text-3xl lg:text-4xl font-semibold opacity-70 transition-all duration-300";
           div.id = `segment-${index}`;
-          div.innerText = segment;
+          div.innerHTML = content;
           div.style.fontSize = `${fontInput.value}px`;
-          div.style.marginBottom = `${currentParagraphSpacing}px`;
           div.style.lineHeight = currentLineHeight;
 
-          // 如果当前处于镜像状态，新渲染的段落也要翻转回来
+          if (segment.trim() === "") {
+            // 这是段落间的空行
+            div.style.marginBottom = `${currentParagraphSpacing}px`;
+            div.style.height = "0"; // 确保空行本身不占据多余的高度
+            div.style.padding = "0";
+          } else {
+            // 这是内容行
+            div.style.paddingTop = lineVPadding;
+            div.style.paddingBottom = lineVPadding;
+            div.style.marginBottom = "0px";
+          }
+
+          // 如果当前处于镜像状态，新渲染的行也要翻转回来
           if (isMirrored) {
             div.style.transform = "scaleX(-1)";
           }
@@ -457,24 +499,100 @@
         resetPosition();
         updateActiveSegment();
 
-        startStopBtn.disabled = scriptSegments.length === 0;
+        // 只有所有行都为空时才禁用启动按钮
+        updateStartButtonState();
       }
 
       /**
-       * 更新当前活动的段落样式
+       * NEW: 检查内容是否可滚动并更新启动按钮状态
+       */
+      function updateStartButtonState() {
+        const hasContent =
+          scriptSegments.length > 0 &&
+          scriptSegments.some((s) => s.trim() !== "");
+
+        if (!hasContent) {
+          startStopBtn.disabled = true;
+          return;
+        }
+
+        // 延迟检查，确保DOM布局完成且scrollHeight计算准确
+        setTimeout(() => {
+          // 检查内容是否溢出容器
+          const isScrollable = display.scrollHeight > display.clientHeight;
+          startStopBtn.disabled = !isScrollable;
+
+          if (!isScrollable && !isVoiceMode) {
+            statusMessage.innerText =
+              "⚠️ 脚本内容太短，无法启动滚动。请添加更多文本。";
+          } else {
+            statusMessage.innerText = "";
+          }
+        }, 50); // 50ms 延迟确保布局完成
+      }
+
+      /**
+       * 更新当前活动的段落/行样式
        */
       function updateActiveSegment() {
         document.querySelectorAll(".script-segment").forEach((el, index) => {
           el.classList.remove("active-segment", "opacity-100");
-          el.classList.add("opacity-70");
 
           if (index === currentSegmentIndex) {
             el.classList.add("active-segment", "opacity-100");
+            el.classList.remove("opacity-70", "opacity-30");
           } else if (index < currentSegmentIndex) {
-            // 已读过的段落变淡
+            // 已读过的行变淡
             el.classList.add("opacity-30");
+            el.classList.remove("opacity-70");
+          } else {
+            // 未读过的行保持中等亮度
+            el.classList.add("opacity-70");
+            el.classList.remove("opacity-30");
           }
         });
+      }
+
+      /**
+       * NEW: 根据当前滚动位置更新活动段落
+       */
+      function updateSegmentByScrollPosition() {
+        // 如果在自动滚动或语音模式下，则不通过滚动位置来更新活动段落，以免冲突
+        if (isScrolling || isVoiceMode) return;
+
+        const segments = document.querySelectorAll(".script-segment");
+        if (segments.length === 0) return;
+
+        const displayRect = document
+          .getElementById("teleprompter-display")
+          .getBoundingClientRect();
+        // 目标位置：提词器显示区垂直中点的绝对位置
+        const centerOffset = displayRect.top + displayRect.height / 2;
+
+        let bestIndex = currentSegmentIndex; // 默认值
+        let minDistance = Infinity;
+
+        segments.forEach((el, index) => {
+          // 忽略空行（段落分隔符）的匹配
+          if (scriptSegments[index].trim() === "") return;
+
+          const rect = el.getBoundingClientRect();
+          // 段落中心点相对于屏幕顶部的绝对位置
+          const elCenter = rect.top + rect.height / 2;
+
+          // 段落中心点与提词器中线的距离
+          const distance = Math.abs(elCenter - centerOffset);
+
+          if (distance < minDistance) {
+            minDistance = distance;
+            bestIndex = index;
+          }
+        });
+
+        if (bestIndex !== currentSegmentIndex) {
+          currentSegmentIndex = bestIndex;
+          updateActiveSegment();
+        }
       }
 
       /**
@@ -511,7 +629,7 @@
       }
 
       /**
-       * NEW: 更新全屏模式下的暂停/播放图标
+       * 更新全屏模式下的暂停/播放图标
        */
       function updateFullscreenIcons() {
         if (!isFullscreen) return;
@@ -528,12 +646,23 @@
 
       function startScroll() {
         if (isScrolling) return;
+
+        // NEW CHECK: 确保内容可滚动
+        if (display.scrollHeight <= display.clientHeight) {
+          statusMessage.innerText =
+            "⚠️ 脚本内容太短，无需滚动。请添加更多文本。";
+          console.warn(
+            "Cannot start scroll: ScrollHeight is not greater than ClientHeight."
+          );
+          stopScroll(); // 确保按钮状态是停止
+          return;
+        }
+
         isScrolling = true;
         startStopBtn.innerText = "暂停滚动";
         startStopBtn.classList.remove("bg-green-600", "hover:bg-green-500");
         startStopBtn.classList.add("bg-orange-600", "hover:bg-orange-500");
 
-        // NEW: 更新全屏图标
         updateFullscreenIcons();
 
         const speed = parseFloat(speedInput.value); // 像素/帧
@@ -559,7 +688,6 @@
         startStopBtn.classList.remove("bg-orange-600", "hover:bg-orange-500");
         startStopBtn.classList.add("bg-green-600", "hover:bg-green-500");
 
-        // NEW: 更新全屏图标
         updateFullscreenIcons();
       }
 
@@ -576,7 +704,7 @@
         recognition.lang = "zh-CN"; // 设置中文识别
 
         recognition.onstart = () => {
-          recognitionHint.innerText = "🎙️ 正在听... 请说当前段落";
+          recognitionHint.innerText = "🎙️ 正在听... 请说当前行";
           recognitionHint.classList.add("visible");
           statusMessage.innerText = "语音模式已启动，请开始朗读。";
         };
@@ -629,7 +757,6 @@
         isVoiceMode = true;
         startStopBtn.disabled = true; // 语音模式下禁用手动启动按钮
         speedInput.disabled = true;
-        // NEW: 语音模式下禁止全屏
         fullscreenBtn.disabled = true;
 
         modeToggleBtn.innerText = "切换到 手动模式";
@@ -637,7 +764,9 @@
         modeToggleBtn.classList.add("bg-purple-600", "hover:bg-purple-500");
 
         stopScroll(); // 确保手动滚动已停止
-        smoothScrollToActiveSegment(); // 居中当前段落
+
+        // 确保当前行是居中且可读的
+        smoothScrollToActiveSegment();
 
         if (currentSegmentIndex < scriptSegments.length) {
           recognition.start();
@@ -648,9 +777,9 @@
 
       function stopVoiceControl() {
         isVoiceMode = false;
-        startStopBtn.disabled = scriptSegments.length === 0;
+        // 只有所有行都为空时才禁用启动按钮
+        updateStartButtonState(); // 使用新的检查函数
         speedInput.disabled = false;
-        // NEW: 退出语音模式后启用全屏
         fullscreenBtn.disabled = false;
 
         modeToggleBtn.innerText = "切换到 语音模式";
@@ -666,32 +795,57 @@
       }
 
       /**
-       * 检查识别结果并推进到下一个段落
+       * 检查识别结果并推进到下一个行
        * @param {string} transcript 识别的文本
        */
       function checkAndAdvance(transcript) {
         if (!isVoiceMode || currentSegmentIndex >= scriptSegments.length)
           return;
 
-        const currentSegment = scriptSegments[currentSegmentIndex];
-        const currentWords = currentSegment
-          .replace(/[，。！？]/g, "")
-          .slice(0, 10); // 取前10个字作为匹配关键词
-
-        // 简单的智能匹配：如果识别的文本包含了当前段落的前几个关键词，则认为朗读完成
-        if (
-          transcript.includes(currentWords.slice(0, 5)) ||
-          transcript.length > currentWords.length * 0.8
+        // 1. 跳过所有空行
+        while (
+          currentSegmentIndex < scriptSegments.length &&
+          scriptSegments[currentSegmentIndex].trim() === ""
         ) {
           currentSegmentIndex++;
+        }
+        if (currentSegmentIndex >= scriptSegments.length) {
+          stopVoiceControl();
+          statusMessage.innerText = "✅ 脚本朗读完毕！切换回手动模式。";
+          return;
+        }
+
+        const currentLine = scriptSegments[currentSegmentIndex];
+        // 尝试匹配当前行开头的较小片段 (8-15个字符)
+        const matchText = currentLine
+          .replace(/[，。！？]/g, "")
+          .trim()
+          .slice(0, 15);
+
+        // 匹配逻辑：如果识别结果包含了当前行大部分文本或关键开头
+        // 判断标准: 1. 识别文本包含目标行开头8个字符
+        // OR 2. 识别文本长度达到目标文本长度的一半 AND 识别文本包含目标文本开头3个字符
+        const isMatch =
+          transcript.includes(matchText.slice(0, 8)) ||
+          (transcript.length > matchText.length * 0.5 &&
+            transcript.includes(matchText.slice(0, 3)));
+
+        if (isMatch) {
+          console.log(
+            `Matched line ${currentSegmentIndex + 1}: "${currentLine.slice(
+              0,
+              10
+            )}..."`
+          );
+          currentSegmentIndex++;
           updateActiveSegment();
-          smoothScrollToActiveSegment();
+          smoothScrollToActiveSegment(); // 滚动到下一行
 
           if (currentSegmentIndex < scriptSegments.length) {
-            // 继续监听下一个段落
+            // 继续监听下一个行
             setTimeout(() => {
               if (isVoiceMode) recognition.start();
-            }, 500); // 延迟0.5秒启动，避免识别到滚动音效
+            }, 500);
           } else {
             // 脚本朗读完毕
             stopVoiceControl();
@@ -745,7 +899,7 @@
           // 禁用语音模式，防止冲突
           if (isVoiceMode) stopVoiceControl();
 
-          // 隐藏所有非显示区元素 (UPDATED)
+          // 隐藏所有非显示区元素
           document.body.classList.add("overflow-hidden");
           headerWrapper.classList.add("hidden");
           bottomControlsWrapper.classList.add("hidden");
@@ -755,17 +909,21 @@
             .getElementById("teleprompter-display")
             .classList.add("is-fullscreen");
 
-          // 显示全屏控制层
+          // 显示全屏控制层和退出按钮
           fsOverlayControls.classList.remove("hidden");
           fsOverlayControls.classList.add("flex");
+          exitFsBtn.classList.remove("hidden"); // 显示退出按钮
 
           // 切换按钮文字
           fullscreenBtn.innerText = "退出全屏";
 
           // 更新全屏图标状态
           updateFullscreenIcons();
+
+          // 确保在全屏状态下，按钮状态基于内容长度
+          updateStartButtonState();
         } else {
-          // 退出全屏 (UPDATED)
+          // 退出全屏
           document.body.classList.remove("overflow-hidden");
           headerWrapper.classList.remove("hidden");
           bottomControlsWrapper.classList.remove("hidden");
@@ -774,30 +932,29 @@
             .getElementById("teleprompter-display")
             .classList.remove("is-fullscreen");
 
-          // 隐藏全屏控制层
+          // 隐藏全屏控制层和退出按钮
           fsOverlayControls.classList.add("hidden");
           fsOverlayControls.classList.remove("flex");
+          exitFsBtn.classList.add("hidden"); // 隐藏退出按钮
 
           // 切换按钮文字
           fullscreenBtn.innerText = "全屏显示";
 
           // 退出全屏时停止滚动
           stopScroll();
-          startStopBtn.disabled = scriptSegments.length === 0;
+          updateStartButtonState(); // 退出全屏后更新按钮状态
         }
       }
 
       /**
-       * NEW: 全屏模式下的点击事件处理 (暂停/播放)
+       * 全屏模式下的点击事件处理 (暂停/播放)
        */
       function handleFullscreenClick() {
         if (isFullscreen && !isVoiceMode) {
-          // 切换 scroll 状态
           if (isScrolling) {
             stopScroll();
           } else {
-            // 仅当有脚本内容时才能启动
-            if (scriptSegments.length > 0) {
+            if (!startStopBtn.disabled) {
               startScroll();
             }
           }
@@ -829,7 +986,7 @@
       // 镜像切换
       mirrorToggleBtn.addEventListener("click", toggleMirroring);
 
-      // NEW: 全屏切换
+      // 全屏切换 (控制面板按钮)
       fullscreenBtn.addEventListener("click", () => {
         if (isVoiceMode) {
           statusMessage.innerText =
@@ -839,15 +996,68 @@
         toggleFullscreen();
       });
 
-      // NEW: 全屏模式下点击提词器区域实现暂停/播放
+      // NEW: 退出全屏按钮 (固定在右上角的按钮)
+      exitFsBtn.addEventListener("click", toggleFullscreen);
+
+      // 全屏模式下点击提词器区域实现暂停/播放
       document
         .getElementById("teleprompter-display")
         .addEventListener("click", handleFullscreenClick);
 
-      // NEW: 监听 Esc 键退出全屏
+      // 监听 Esc 键退出全屏
       document.addEventListener("keydown", (e) => {
         if (isFullscreen && e.key === "Escape") {
           toggleFullscreen();
+        }
+      });
+
+      // 监听提词器区域的滚动事件，实时更新活动段落（用户手动操作时）
+      display.addEventListener("scroll", updateSegmentByScrollPosition);
+
+      // 监听键盘事件，用于蓝牙遥控器控制
+      document.addEventListener("keydown", (e) => {
+        // 确保输入框没有聚焦，防止输入文字时触发控制
+        if (input === document.activeElement) return;
+
+        // 蓝牙遥控器通常模拟 Space, Enter, 或 Arrow Keys
+
+        // 1. 全局播放/暂停 (Spacebar 或 Enter/Return)
+        if (e.code === "Space" || e.key === "Enter") {
+          e.preventDefault();
+          if (isVoiceMode) return; // 语音模式不响应
+
+          if (isFullscreen && !startStopBtn.disabled) {
+            handleFullscreenClick();
+          } else if (!isFullscreen && !startStopBtn.disabled) {
+            isScrolling ? stopScroll() : startScroll();
+          }
+        }
+
+        // 2. 微调滚动 (Arrow Up/Down) - 仅在手动模式下进行
+        if (!isVoiceMode) {
+          const scrollStep = 40; // 每次调整40像素
+          let scrolled = false;
+
+          if (e.key === "ArrowDown") {
+            e.preventDefault();
+            // 只有在非自动滚动时才允许微调
+            if (!isScrolling) {
+              display.scrollTop += scrollStep;
+              scrolled = true;
+            }
+          } else if (e.key === "ArrowUp") {
+            e.preventDefault();
+            if (!isScrolling) {
+              display.scrollTop -= scrollStep;
+              scrolled = true;
+            }
+          }
+
+          // 如果进行了微调，手动触发活动段落更新
+          if (scrolled) {
+            // 延迟调用，确保滚动完成后段落位置计算准确
+            setTimeout(updateSegmentByScrollPosition, 100);
+          }
         }
       });
 
@@ -891,7 +1101,7 @@
           // 确保字体大小变化后，镜像样式保持
           if (isMirrored) el.style.transform = "scaleX(-1)";
         });
-        // 不必调用 updateActiveSegment，因为它会触发一次额外的滚动
+        updateSegmentByScrollPosition(); // 字体大小变化可能影响当前行位置
       });
 
       // 文本边距变化 (Horizontal Padding)
@@ -901,6 +1111,7 @@
         // 应用 padding 到内容 wrapper
         display.style.paddingLeft = value;
         display.style.paddingRight = value;
+        updateSegmentByScrollPosition();
       });
 
       // 段落间距变化 (Vertical Margin)
@@ -908,9 +1119,13 @@
         const value = `${paragraphInput.value}px`;
         paragraphValue.innerText = value;
         // 应用 margin-bottom 到所有脚本段落
-        document.querySelectorAll(".script-segment").forEach((el) => {
-          el.style.marginBottom = value;
+        document.querySelectorAll(".script-segment").forEach((el, index) => {
+          // 只有空行才应用段落间距
+          if (scriptSegments[index].trim() === "") {
+            el.style.marginBottom = value;
+          }
         });
+        updateSegmentByScrollPosition();
       });
 
       // 行高变化 (Line Height)
@@ -921,6 +1136,19 @@
         document.querySelectorAll(".script-segment").forEach((el) => {
           el.style.lineHeight = value;
         });
+        updateSegmentByScrollPosition();
+      });
+
+      // NEW: 监听窗口大小变化（特别是针对移动端旋转和地址栏显示/隐藏）
+      window.addEventListener("resize", () => {
+        // 延迟检查，确保DOM尺寸稳定
+        setTimeout(updateStartButtonState, 200);
+        // 如果正在滚动，停止并重新检查滚动状态
+        if (isScrolling) {
+          stopScroll();
+        }
+        // 确保活动行保持在中心
+        smoothScrollToActiveSegment();
       });
 
       // --- 初始化 ---
@@ -935,12 +1163,16 @@
         // 3. 初始化语音识别对象 (但暂时不启动)
         initSpeechRecognition();
 
-        // 4. 初始化UI状态
-        startStopBtn.disabled = scriptSegments.length === 0;
+        // 4. 初始化UI状态 (使用新的检查，它会延迟执行)
+        // startStopBtn.disabled = scriptSegments.length === 0 || scriptSegments.every(s => s.trim() === '');
+        updateStartButtonState();
 
         // 5. 应用初始文本边距
         display.style.paddingLeft = `${paddingInput.value}px`;
         display.style.paddingRight = `${paddingInput.value}px`;
+
+        // 6. 初始定位
+        resetPosition();
       };
     </script>
   </body>
