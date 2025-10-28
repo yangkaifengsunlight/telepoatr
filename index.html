@@ -410,7 +410,7 @@
 
     <script>
       // 全局变量
-      let scrollInterval = null;
+      let scrollAnimFrameId = null; // NEW: 替换 scrollInterval
       let isScrolling = false;
       let isVoiceMode = false;
       let isMirrored = false;
@@ -504,7 +504,7 @@
       }
 
       /**
-       * NEW: 检查内容是否可滚动并更新启动按钮状态
+       * 检查内容是否可滚动并更新启动按钮状态
        */
       function updateStartButtonState() {
         const hasContent =
@@ -554,7 +554,7 @@
       }
 
       /**
-       * NEW: 根据当前滚动位置更新活动段落
+       * 根据当前滚动位置更新活动段落
        */
       function updateSegmentByScrollPosition() {
         // 如果在自动滚动或语音模式下，则不通过滚动位置来更新活动段落，以免冲突
@@ -642,12 +642,36 @@
         }
       }
 
-      // --- 核心模式逻辑：手动滚动 ---
+      // --- 核心模式逻辑：手动滚动 (使用 requestAnimationFrame) ---
+
+      /**
+       * 滚动循环 (使用 requestAnimationFrame)
+       */
+      function scrollLoop() {
+        if (!isScrolling) return;
+
+        const speed = parseFloat(speedInput.value);
+
+        // 检查是否到达底部，留出5px的缓冲
+        if (
+          display.scrollTop + display.clientHeight >=
+          display.scrollHeight - 5
+        ) {
+          stopScroll();
+          return;
+        }
+
+        // 应用滚动
+        display.scrollTop += speed;
+
+        // 继续下一帧的循环
+        scrollAnimFrameId = requestAnimationFrame(scrollLoop);
+      }
 
       function startScroll() {
         if (isScrolling) return;
 
-        // NEW CHECK: 确保内容可滚动
+        // 1. 确保内容可滚动
         if (display.scrollHeight <= display.clientHeight) {
           statusMessage.innerText =
             "⚠️ 脚本内容太短，无需滚动。请添加更多文本。";
@@ -665,25 +689,20 @@
 
         updateFullscreenIcons();
 
-        const speed = parseFloat(speedInput.value); // 像素/帧
-
-        scrollInterval = setInterval(() => {
-          display.scrollTop += speed;
-
-          // 滚动到底部自动停止
-          if (
-            display.scrollTop + display.clientHeight >=
-            display.scrollHeight - 5
-          ) {
-            stopScroll();
-          }
-        }, 30); // 30ms 刷新一次
+        // 2. 启动 requestAnimationFrame 循环
+        scrollLoop();
       }
 
       function stopScroll() {
         if (!isScrolling) return;
         isScrolling = false;
-        clearInterval(scrollInterval);
+
+        // 使用 cancelAnimationFrame 停止循环
+        if (scrollAnimFrameId) {
+          cancelAnimationFrame(scrollAnimFrameId);
+          scrollAnimFrameId = null;
+        }
+
         startStopBtn.innerText = "启动滚动";
         startStopBtn.classList.remove("bg-orange-600", "hover:bg-orange-500");
         startStopBtn.classList.add("bg-green-600", "hover:bg-green-500");
@@ -826,7 +845,7 @@
         // 判断标准: 1. 识别文本包含目标行开头8个字符
         // OR 2. 识别文本长度达到目标文本长度的一半 AND 识别文本包含目标文本开头3个字符
         const isMatch =
-          transcript.includes(matchText.slice(0, 8)) ||
+          transcript.includes(matchText.slice(0, 0)) ||
           (transcript.length > matchText.length * 0.5 &&
             transcript.includes(matchText.slice(0, 3)));
 
@@ -890,7 +909,7 @@
       }
 
       /**
-       * NEW: 切换全屏状态
+       * 切换全屏状态
        */
       function toggleFullscreen() {
         isFullscreen = !isFullscreen;
@@ -1087,10 +1106,8 @@
       // 速度变化
       speedInput.addEventListener("input", () => {
         speedValue.innerText = speedInput.value;
-        if (isScrolling) {
-          stopScroll();
-          startScroll(); // 立即应用新速度
-        }
+        // 使用 rAF 后，速度变化无需停止/重启，直接在 scrollLoop 中生效
+        // 但如果当前没有滚动，需要确保下次启动时的速度是新的
       });
 
       // 字体变化
@@ -1139,11 +1156,11 @@
         updateSegmentByScrollPosition();
       });
 
-      // NEW: 监听窗口大小变化（特别是针对移动端旋转和地址栏显示/隐藏）
+      // 监听窗口大小变化（特别是针对移动端旋转和地址栏显示/隐藏）
       window.addEventListener("resize", () => {
         // 延迟检查，确保DOM尺寸稳定
         setTimeout(updateStartButtonState, 200);
-        // 如果正在滚动，停止并重新检查滚动状态
+        // 如果正在滚动，停止并重新检查滚动状态，因为窗口变化会影响滚动边界
         if (isScrolling) {
           stopScroll();
         }
@@ -1164,7 +1181,6 @@
         initSpeechRecognition();
 
         // 4. 初始化UI状态 (使用新的检查，它会延迟执行)
-        // startStopBtn.disabled = scriptSegments.length === 0 || scriptSegments.every(s => s.trim() === '');
         updateStartButtonState();
 
         // 5. 应用初始文本边距
