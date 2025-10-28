@@ -33,7 +33,7 @@
         flex-direction: column;
         padding: 1rem;
         overflow: hidden;
-        min-height: 0; /* 关键修复 1: 确保包含滚动内容的 Flex 容器不会崩溃 */
+        min-height: 0;
       }
 
       /* 4. 提词器显示区域：占据所有剩余空间 */
@@ -41,14 +41,14 @@
         position: relative;
         flex-grow: 1; /* 占据 main-container 剩余高度 */
         overflow: hidden;
-        min-height: 0; /* 关键修复 2: 确保滚动区域的父元素正确计算其高度 */
+        min-height: 0;
       }
 
       /* 脚本内容容器：内部负责滚动 */
       #script-content-wrapper {
         width: 100%;
         max-width: 900px;
-        height: 100%; /* 100% of #teleprompter-display's calculated height */
+        height: 100%;
         overflow-y: scroll;
         scroll-behavior: smooth;
         padding-top: 50vh;
@@ -57,6 +57,8 @@
         -webkit-overflow-scrolling: touch;
         margin-left: auto;
         margin-right: auto;
+        /* 关键修复 1: 阻止默认触摸行为，提高程序化滚动的稳定性 */
+        touch-action: none;
       }
 
       /* === 全屏模式样式保持不变，但更健壮 === */
@@ -494,7 +496,6 @@
         scriptSegments = lines;
 
         display.innerHTML = "";
-        const currentParagraphSpacing = paragraphInput.value;
         const currentLineHeight = lineHeightInput.value;
         const lineVPadding = "8px";
 
@@ -511,7 +512,8 @@
           div.style.lineHeight = currentLineHeight;
 
           if (segment.trim() === "") {
-            div.style.marginBottom = `${currentParagraphSpacing}px`;
+            // 空行用于分隔段落，设置段落间距
+            div.style.marginBottom = `${paragraphInput.value}px`;
             div.style.height = "0";
             div.style.padding = "0";
           } else {
@@ -533,7 +535,8 @@
       }
 
       /**
-       * 检查内容是否可滚动并更新启动按钮状态
+       * 检查内容是否存在并更新启动按钮状态
+       * 简化逻辑：只要有内容，就启用按钮，将滚动性检查留给 startScroll()
        */
       function updateStartButtonState() {
         const hasContent =
@@ -546,21 +549,10 @@
           return;
         }
 
-        // 延迟检查，确保DOM布局完成且scrollHeight计算准确
-        setTimeout(() => {
-          // 检查内容是否溢出容器 (这是移动端滚动失败的关键检查点)
-          const isScrollable = display.scrollHeight > display.clientHeight + 10; // 增加10px缓冲
-          startStopBtn.disabled = !isScrollable && !isVoiceMode;
-
-          if (!isScrollable && !isVoiceMode) {
-            statusMessage.innerText = "⚠️ 脚本内容太短，无法启动滚动。";
-          } else {
-            // 只有在非语音模式下且无滚动问题时才清空状态，以免覆盖语音提示
-            if (!isVoiceMode) {
-              statusMessage.innerText = "";
-            }
-          }
-        }, 100); // 100ms 延迟确保布局在移动端稳定
+        if (!isVoiceMode) {
+          startStopBtn.disabled = false;
+          statusMessage.innerText = "";
+        }
       }
 
       /**
@@ -693,7 +685,7 @@
 
         const speed = parseFloat(speedInput.value);
 
-        // 检查是否到达底部
+        // 检查是否到达底部，增加5px缓冲
         if (
           display.scrollTop + display.clientHeight >=
           display.scrollHeight - 5
@@ -712,11 +704,11 @@
       function startScroll() {
         if (isScrolling) return;
 
-        // 1. 确保内容可滚动 (再次检查)
-        if (display.scrollHeight <= display.clientHeight + 10) {
+        // 1. 检查内容是否可滚动 - 必须在启动前同步检查
+        // 增加50px缓冲，以应对移动端浮动工具栏导致的视口变化
+        if (display.scrollHeight <= display.clientHeight + 50) {
           statusMessage.innerText =
             "⚠️ 脚本内容太短，无法启动滚动。请在设置中添加更多文本。";
-          stopScroll();
           return;
         }
 
@@ -1104,8 +1096,6 @@
 
       // 脚本输入和滑块更改事件：在弹窗中进行，但监听器保持不变
       input.addEventListener("input", () => {
-        // 仅在关闭弹窗时调用 renderScript，以避免输入时频繁重绘
-        // 但这里为了即时反馈，保留直接调用
         renderScript();
         stopScroll();
         if (isVoiceMode) stopVoiceControl();
@@ -1156,10 +1146,11 @@
       });
 
       window.addEventListener("resize", () => {
-        setTimeout(updateStartButtonState, 200);
+        // 在 resize 时确保停止滚动，让浏览器重新计算布局
         if (isScrolling) {
           stopScroll();
         }
+        updateStartButtonState();
         smoothScrollToActiveSegment();
       });
 
