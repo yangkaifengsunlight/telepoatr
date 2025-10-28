@@ -29,13 +29,25 @@
       /* 提词器内容区域，实现全屏居中阅读效果 */
       #teleprompter-display {
         position: relative;
-        height: calc(100vh - 280px); /* 减去控制面板的高度 */
+        /* 默认高度：减去控制面板的高度，适用于大部分竖屏/桌面 */
+        height: calc(100vh - 280px);
         overflow: hidden;
         display: flex;
         justify-content: center;
         align-items: center;
         padding: 0 1rem;
       }
+
+      /* === 响应式优化：针对横屏或小屏幕 === */
+      @media (max-width: 1024px) and (orientation: landscape) {
+        /* 在手机横屏模式下，控制面板在屏幕上占据的相对空间变小，
+               因此提词器显示区可以占据更多的垂直高度 */
+        #teleprompter-display {
+          height: calc(100vh - 150px);
+        }
+      }
+      /* ================================== */
+
       /* 用于定位居中线 */
       #center-line {
         position: absolute;
@@ -270,10 +282,10 @@
             class="block text-sm font-medium text-gray-300"
             >演讲稿内容 (段落间请用空行分隔)</label
           >
+          <!-- 适配横屏和桌面：默认高 6rem (h-24)，中等屏幕以上高 9rem (md:h-36) -->
           <textarea
             id="script-input"
-            rows="4"
-            class="w-full p-2 mt-1 rounded-lg bg-gray-700 text-gray-200 focus:ring-primary focus:border-primary border border-gray-600"
+            class="w-full h-24 md:h-36 p-2 mt-1 rounded-lg bg-gray-700 text-gray-200 focus:ring-primary focus:border-primary border border-gray-600"
           >
 各位观众大家好，欢迎来到今天的分享会。
 信息时代，我们常被数字世界的混乱所困扰。你是不是也常被电脑、手机、网盘里的文件搞得焦头烂额？明明保存过的东西，偏偏急用时翻遍全网都找不到？
