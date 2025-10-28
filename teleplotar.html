@@ -1,0 +1,732 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI智能提词器</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      /* 强制使用深色背景，提高阅读对比度 */
+      body {
+        font-family: "Inter", sans-serif;
+        background-color: #1f2937; /* Gray-800 */
+      }
+      /* 定制滚动条外观 */
+      .scrolling-content::-webkit-scrollbar {
+        width: 8px;
+      }
+      .scrolling-content::-webkit-scrollbar-thumb {
+        background-color: #4b5563; /* Gray-600 */
+        border-radius: 4px;
+      }
+      .scrolling-content::-webkit-scrollbar-track {
+        background: #374151; /* Gray-700 */
+      }
+      /* 提词器内容区域，实现全屏居中阅读效果 */
+      #teleprompter-display {
+        position: relative;
+        height: calc(100vh - 280px); /* 减去控制面板的高度 */
+        overflow: hidden;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        padding: 0 1rem;
+      }
+      /* 用于定位居中线 */
+      #center-line {
+        position: absolute;
+        top: 50%;
+        left: 0;
+        right: 0;
+        border-top: 2px dashed #fcd34d; /* Amber-300 */
+        z-index: 10;
+      }
+      /* 内容容器，允许内部内容垂直居中定位 */
+      #script-content-wrapper {
+        width: 100%;
+        max-width: 900px;
+        height: 100%;
+        overflow-y: scroll;
+        scroll-behavior: smooth;
+        padding-top: 50vh; /* 确保第一行内容可以滚动到中间 */
+        padding-bottom: 50vh; /* 确保最后一行内容可以滚动到中间 */
+        /* 初始水平边距将在JS中设置 */
+        transition: transform 0.3s ease-out; /* 平滑过渡镜像效果 */
+      }
+      /* 脚本段落样式 */
+      .script-segment {
+        transition: color 0.3s, transform 0.3s;
+        text-align: center;
+      }
+      /* 激活段落样式 */
+      .active-segment {
+        color: #fcd34d !important; /* Amber-300 */
+        transform: scale(1.05);
+      }
+      /* 识别提示样式 */
+      .recognition-hint {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        z-index: 50;
+        padding: 0.5rem 1rem;
+        background: rgba(251, 191, 36, 0.95); /* Amber-400 */
+        color: #1f2937;
+        border-radius: 9999px;
+        font-weight: 600;
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.2);
+        opacity: 0;
+        transition: opacity 0.5s ease;
+      }
+      .recognition-hint.visible {
+        opacity: 1;
+      }
+    </style>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              primary: "#fcd34d",
+              secondary: "#374151",
+            },
+          },
+        },
+      };
+    </script>
+  </head>
+  <body class="bg-gray-900 text-gray-100 min-h-screen">
+    <div class="container mx-auto p-4 max-w-7xl">
+      <h1 class="text-3xl font-bold text-center mb-6 text-primary">
+        AI智能提词器 🎙️
+      </h1>
+
+      <!-- 提词器显示区 -->
+      <div
+        id="teleprompter-display"
+        class="relative bg-gray-900 rounded-xl shadow-2xl border border-gray-700"
+      >
+        <div id="center-line"></div>
+        <div id="script-content-wrapper" class="text-gray-300">
+          <!-- 脚本内容将在此处插入 -->
+        </div>
+        <div id="recognition-hint" class="recognition-hint">
+          正在听... 请说当前段落
+        </div>
+      </div>
+
+      <!-- 状态和提示信息 -->
+      <div
+        id="status-message"
+        class="text-center mt-4 p-2 rounded-lg font-medium text-red-400"
+      >
+        <!-- 状态/错误信息 -->
+      </div>
+
+      <!-- 控制面板 -->
+      <div class="bg-gray-800 p-4 rounded-xl mt-6 shadow-lg">
+        <div class="flex flex-wrap justify-between items-center gap-4 mb-4">
+          <!-- 模式切换按钮 -->
+          <button
+            id="mode-toggle-btn"
+            class="flex-1 min-w-[120px] px-4 py-2 rounded-lg font-semibold transition duration-200 bg-yellow-600 hover:bg-yellow-500 text-gray-900 shadow-md"
+          >
+            切换到 语音模式
+          </button>
+
+          <!-- NEW: 镜像功能按钮 -->
+          <button
+            id="mirror-toggle-btn"
+            class="flex-1 min-w-[120px] px-4 py-2 rounded-lg font-semibold transition duration-200 bg-gray-600 hover:bg-gray-500 text-white shadow-md"
+          >
+            开启镜像
+          </button>
+
+          <!-- 启动/停止按钮 -->
+          <button
+            id="start-stop-btn"
+            class="flex-1 min-w-[120px] px-4 py-2 rounded-lg font-semibold transition duration-200 bg-green-600 hover:bg-green-500 text-white shadow-md"
+            disabled
+          >
+            启动滚动
+          </button>
+
+          <!-- 重置按钮 -->
+          <button
+            id="reset-btn"
+            class="flex-1 min-w-[120px] px-4 py-2 rounded-lg font-semibold transition duration-200 bg-red-600 hover:bg-red-500 text-white shadow-md"
+          >
+            重置位置
+          </button>
+        </div>
+
+        <!-- Control Row 1: 滚动速度、字体大小、文本边距、段落间距控制 -->
+        <div class="flex flex-wrap justify-start items-center gap-6 mt-4">
+          <!-- 滚动速度控制 -->
+          <div class="w-full sm:w-1/2 lg:w-[23%]">
+            <label
+              for="scroll-speed"
+              class="block text-sm font-medium text-gray-300"
+              >滚动速度 (<span id="speed-value">2</span>)</label
+            >
+            <input
+              type="range"
+              id="scroll-speed"
+              min="0.5"
+              max="5"
+              step="0.5"
+              value="2"
+              class="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
+            />
+          </div>
+
+          <!-- 字体大小控制 -->
+          <div class="w-full sm:w-1/2 lg:w-[23%]">
+            <label
+              for="font-size"
+              class="block text-sm font-medium text-gray-300"
+              >字体大小 (<span id="font-value">48px</span>)</label
+            >
+            <input
+              type="range"
+              id="font-size"
+              min="20"
+              max="96"
+              step="4"
+              value="48"
+              class="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
+            />
+          </div>
+
+          <!-- 文本边距控制 (Horizontal Padding) -->
+          <div class="w-full sm:w-1/2 lg:w-[23%]">
+            <label
+              for="text-padding"
+              class="block text-sm font-medium text-gray-300"
+              >文本边距(左右) (<span id="padding-value">20px</span>)</label
+            >
+            <input
+              type="range"
+              id="text-padding"
+              min="0"
+              max="150"
+              step="5"
+              value="20"
+              class="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
+            />
+          </div>
+
+          <!-- 段落间距控制 (Vertical Margin) -->
+          <div class="w-full sm:w-1/2 lg:w-[23%]">
+            <label
+              for="paragraph-spacing"
+              class="block text-sm font-medium text-gray-300"
+              >段落间距(垂直) (<span id="paragraph-value">20px</span>)</label
+            >
+            <input
+              type="range"
+              id="paragraph-spacing"
+              min="5"
+              max="100"
+              step="5"
+              value="20"
+              class="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
+            />
+          </div>
+        </div>
+
+        <!-- Control Row 2: 行高控制 -->
+        <div
+          class="flex flex-wrap justify-start items-center gap-6 mt-6 pt-4 border-t border-gray-700"
+        >
+          <!-- 行高控制 (Line Height) -->
+          <div class="w-full sm:w-1/2 lg:w-[23%]">
+            <label
+              for="line-height-control"
+              class="block text-sm font-medium text-gray-300"
+              >行高 (行内间距) (<span id="line-height-value">1.5</span>)</label
+            >
+            <input
+              type="range"
+              id="line-height-control"
+              min="1.0"
+              max="2.5"
+              step="0.1"
+              value="1.5"
+              class="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
+            />
+          </div>
+        </div>
+
+        <!-- 文本输入区, 独立一行 -->
+        <div class="w-full mt-6">
+          <label
+            for="script-input"
+            class="block text-sm font-medium text-gray-300"
+            >演讲稿内容 (段落间请用空行分隔)</label
+          >
+          <textarea
+            id="script-input"
+            rows="4"
+            class="w-full p-2 mt-1 rounded-lg bg-gray-700 text-gray-200 focus:ring-primary focus:border-primary border border-gray-600"
+          >
+各位观众大家好，欢迎来到今天的分享会。
+信息时代，我们常被数字世界的混乱所困扰。你是不是也常被电脑、手机、网盘里的文件搞得焦头烂额？明明保存过的东西，偏偏急用时翻遍全网都找不到？
+
+别急，今天我要给你分享一个超简单的方法——PARA！
+只需要4个文件夹，就能让你的数字生活瞬间变清爽，找东西再也不抓狂。
+项目（Projects）放你眼下正在忙的事。
+领域（Areas）放你生活中需要持续关注的大块领域。
+资源（Resources）放你感兴趣或正在学习的知识库。
+归档（Archives）放过去完成或暂时用不上的东西。
+
+对，就是这么简单！这四个文件夹，涵盖了你数字生活的所有东西。工作任务、个人兴趣，PARA都能帮你分得清清楚楚。
+我自己试了以后，真的有种“救命啊终于找到组织神器”的感觉！试一次，你就知道有多爽！
+感谢大家的收听，期待与你下期再见！peace～
+                </textarea
+          >
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // 全局变量
+      let scrollInterval = null;
+      let isScrolling = false;
+      let isVoiceMode = false;
+      let isMirrored = false; // NEW: 镜像状态
+      let recognition = null;
+      let scriptSegments = [];
+      let currentSegmentIndex = 0;
+
+      // DOM 元素
+      const display = document.getElementById("script-content-wrapper");
+      const input = document.getElementById("script-input");
+      const startStopBtn = document.getElementById("start-stop-btn");
+      const resetBtn = document.getElementById("reset-btn");
+      const speedInput = document.getElementById("scroll-speed");
+      const speedValue = document.getElementById("speed-value");
+      const fontInput = document.getElementById("font-size");
+      const fontValue = document.getElementById("font-value");
+      const paddingInput = document.getElementById("text-padding");
+      const paddingValue = document.getElementById("padding-value");
+      const paragraphInput = document.getElementById("paragraph-spacing");
+      const paragraphValue = document.getElementById("paragraph-value");
+      const lineHeightInput = document.getElementById("line-height-control");
+      const lineHeightValue = document.getElementById("line-height-value");
+      const mirrorToggleBtn = document.getElementById("mirror-toggle-btn"); // NEW
+
+      const statusMessage = document.getElementById("status-message");
+      const modeToggleBtn = document.getElementById("mode-toggle-btn");
+      const recognitionHint = document.getElementById("recognition-hint");
+
+      // --- 辅助函数 ---
+
+      /**
+       * 渲染脚本到提词器显示区
+       */
+      function renderScript() {
+        const text = input.value;
+        // 使用两个或多个换行符来分隔段落
+        const segments = text.split(/\n\s*\n/).filter((s) => s.trim() !== "");
+        scriptSegments = segments.map((s) => s.trim());
+
+        display.innerHTML = "";
+        const currentParagraphSpacing = paragraphInput.value;
+        const currentLineHeight = lineHeightInput.value;
+
+        scriptSegments.forEach((segment, index) => {
+          const div = document.createElement("div");
+          div.className =
+            "script-segment text-2xl md:text-3xl lg:text-4xl font-semibold opacity-70 transition-all duration-300";
+          div.id = `segment-${index}`;
+          div.innerText = segment;
+          div.style.fontSize = `${fontInput.value}px`;
+          div.style.marginBottom = `${currentParagraphSpacing}px`;
+          div.style.lineHeight = currentLineHeight;
+
+          // NEW: 如果当前处于镜像状态，新渲染的段落也要翻转回来
+          if (isMirrored) {
+            div.style.transform = "scaleX(-1)";
+          }
+
+          display.appendChild(div);
+        });
+
+        // 首次渲染后，重置并激活第一个段落
+        resetPosition();
+        updateActiveSegment();
+
+        startStopBtn.disabled = scriptSegments.length === 0;
+      }
+
+      /**
+       * 更新当前活动的段落样式
+       */
+      function updateActiveSegment() {
+        document.querySelectorAll(".script-segment").forEach((el, index) => {
+          el.classList.remove("active-segment", "opacity-100");
+          el.classList.add("opacity-70");
+
+          if (index === currentSegmentIndex) {
+            el.classList.add("active-segment", "opacity-100");
+          } else if (index < currentSegmentIndex) {
+            // 已读过的段落变淡
+            el.classList.add("opacity-30");
+          }
+        });
+      }
+
+      /**
+       * 平滑滚动到当前活动段落的中央
+       */
+      function smoothScrollToActiveSegment() {
+        const activeSegment = document.getElementById(
+          `segment-${currentSegmentIndex}`
+        );
+        if (activeSegment) {
+          // 使用 scrollIntoView 居中对齐
+          activeSegment.scrollIntoView({
+            behavior: "smooth",
+            block: "center",
+          });
+        }
+      }
+
+      /**
+       * 检查 Web Speech API 兼容性
+       */
+      function checkSpeechApi() {
+        if (
+          !("webkitSpeechRecognition" in window) &&
+          !("SpeechRecognition" in window)
+        ) {
+          statusMessage.innerText =
+            "⚠️ 警告: 您的浏览器不支持 Web Speech API (语音识别)。智能语音模式将不可用。";
+          modeToggleBtn.disabled = true;
+          return false;
+        }
+        statusMessage.innerText = "";
+        return true;
+      }
+
+      // --- 核心模式逻辑：手动滚动 ---
+
+      function startScroll() {
+        if (isScrolling) return;
+        isScrolling = true;
+        startStopBtn.innerText = "暂停滚动";
+        startStopBtn.classList.remove("bg-green-600", "hover:bg-green-500");
+        startStopBtn.classList.add("bg-orange-600", "hover:bg-orange-500");
+
+        const speed = parseFloat(speedInput.value); // 像素/帧
+
+        scrollInterval = setInterval(() => {
+          display.scrollTop += speed;
+
+          // 滚动到底部自动停止
+          if (
+            display.scrollTop + display.clientHeight >=
+            display.scrollHeight - 5
+          ) {
+            stopScroll();
+          }
+        }, 30); // 30ms 刷新一次
+      }
+
+      function stopScroll() {
+        if (!isScrolling) return;
+        isScrolling = false;
+        clearInterval(scrollInterval);
+        startStopBtn.innerText = "启动滚动";
+        startStopBtn.classList.remove("bg-orange-600", "hover:bg-orange-500");
+        startStopBtn.classList.add("bg-green-600", "hover:bg-green-500");
+      }
+
+      // --- 核心模式逻辑：语音智能推进 ---
+
+      function initSpeechRecognition() {
+        if (!checkSpeechApi()) return;
+
+        const SpeechRecognition =
+          window.SpeechRecognition || window.webkitSpeechRecognition;
+        recognition = new SpeechRecognition();
+        recognition.continuous = false; // 只听一句
+        recognition.interimResults = false; // 只返回最终结果
+        recognition.lang = "zh-CN"; // 设置中文识别
+
+        recognition.onstart = () => {
+          recognitionHint.innerText = "🎙️ 正在听... 请说当前段落";
+          recognitionHint.classList.add("visible");
+          statusMessage.innerText = "语音模式已启动，请开始朗读。";
+        };
+
+        recognition.onresult = (event) => {
+          const transcript = event.results[0][0].transcript;
+          console.log("识别结果:", transcript);
+          checkAndAdvance(transcript);
+        };
+
+        recognition.onend = () => {
+          recognitionHint.classList.remove("visible");
+          if (isVoiceMode) {
+            // 如果未完成，自动重新启动监听
+            setTimeout(() => {
+              if (isVoiceMode && currentSegmentIndex < scriptSegments.length) {
+                try {
+                  recognition.start();
+                } catch (e) {
+                  console.warn(
+                    "Recognition already started, ignoring auto-restart."
+                  );
+                }
+              } else if (currentSegmentIndex >= scriptSegments.length) {
+                statusMessage.innerText = "✅ 脚本朗读完毕！";
+              }
+            }, 100);
+          }
+        };
+
+        recognition.onerror = (event) => {
+          console.error("语音识别错误:", event.error);
+          statusMessage.innerText = `❌ 语音识别错误: ${event.error}. 请检查麦克风权限。`;
+          recognitionHint.classList.remove("visible");
+          if (isVoiceMode) {
+            // 错误后尝试重新启动
+            setTimeout(() => {
+              if (isVoiceMode && currentSegmentIndex < scriptSegments.length) {
+                try {
+                  recognition.start();
+                } catch (e) {}
+              }
+            }, 1000);
+          }
+        };
+      }
+
+      function startVoiceControl() {
+        if (!recognition) initSpeechRecognition();
+        isVoiceMode = true;
+        startStopBtn.disabled = true; // 语音模式下禁用手动启动按钮
+        speedInput.disabled = true;
+
+        modeToggleBtn.innerText = "切换到 手动模式";
+        modeToggleBtn.classList.remove("bg-yellow-600", "hover:bg-yellow-500");
+        modeToggleBtn.classList.add("bg-purple-600", "hover:bg-purple-500");
+
+        stopScroll(); // 确保手动滚动已停止
+        smoothScrollToActiveSegment(); // 居中当前段落
+
+        if (currentSegmentIndex < scriptSegments.length) {
+          recognition.start();
+        } else {
+          statusMessage.innerText = "请点击重置按钮开始朗读。";
+        }
+      }
+
+      function stopVoiceControl() {
+        isVoiceMode = false;
+        startStopBtn.disabled = scriptSegments.length === 0;
+        speedInput.disabled = false;
+
+        modeToggleBtn.innerText = "切换到 语音模式";
+        modeToggleBtn.classList.remove("bg-purple-600", "hover:bg-purple-500");
+        modeToggleBtn.classList.add("bg-yellow-600", "hover:bg-yellow-500");
+
+        recognitionHint.classList.remove("visible");
+        statusMessage.innerText = "已切换回手动模式。";
+
+        if (recognition) {
+          recognition.stop();
+        }
+      }
+
+      /**
+       * 检查识别结果并推进到下一个段落
+       * @param {string} transcript 识别的文本
+       */
+      function checkAndAdvance(transcript) {
+        if (!isVoiceMode || currentSegmentIndex >= scriptSegments.length)
+          return;
+
+        const currentSegment = scriptSegments[currentSegmentIndex];
+        const currentWords = currentSegment
+          .replace(/[，。！？]/g, "")
+          .slice(0, 10); // 取前10个字作为匹配关键词
+
+        // 简单的智能匹配：如果识别的文本包含了当前段落的前几个关键词，则认为朗读完成
+        if (
+          transcript.includes(currentWords.slice(0, 5)) ||
+          transcript.length > currentWords.length * 0.8
+        ) {
+          currentSegmentIndex++;
+          updateActiveSegment();
+          smoothScrollToActiveSegment();
+
+          if (currentSegmentIndex < scriptSegments.length) {
+            // 继续监听下一个段落
+            setTimeout(() => {
+              if (isVoiceMode) recognition.start();
+            }, 500); // 延迟0.5秒启动，避免识别到滚动音效
+          } else {
+            // 脚本朗读完毕
+            stopVoiceControl();
+            statusMessage.innerText = "✅ 脚本朗读完毕！切换回手动模式。";
+          }
+        } else {
+          // 未匹配，继续监听
+          setTimeout(() => {
+            if (isVoiceMode) recognition.start();
+          }, 500);
+        }
+      }
+
+      /**
+       * NEW: 切换镜像状态
+       */
+      function toggleMirroring() {
+        isMirrored = !isMirrored;
+        const segments = document.querySelectorAll(".script-segment");
+
+        if (isMirrored) {
+          // 1. 翻转内容容器 (Wrapper)
+          display.style.transform = "scaleX(-1)";
+          // 2. 翻转内部文本 (Segments) 使其可读
+          segments.forEach((el) => {
+            el.style.transform = "scaleX(-1)";
+          });
+          mirrorToggleBtn.innerText = "关闭镜像";
+          mirrorToggleBtn.classList.remove("bg-gray-600", "hover:bg-gray-500");
+          mirrorToggleBtn.classList.add("bg-blue-600", "hover:bg-blue-500");
+        } else {
+          // 1. 恢复内容容器
+          display.style.transform = "none";
+          // 2. 恢复内部文本
+          segments.forEach((el) => {
+            el.style.transform = "none";
+          });
+          mirrorToggleBtn.innerText = "开启镜像";
+          mirrorToggleBtn.classList.remove("bg-blue-600", "hover:bg-blue-500");
+          mirrorToggleBtn.classList.add("bg-gray-600", "hover:bg-gray-500");
+        }
+      }
+
+      // --- 事件监听 ---
+
+      // 模式切换
+      modeToggleBtn.addEventListener("click", () => {
+        if (isVoiceMode) {
+          stopVoiceControl();
+        } else {
+          startVoiceControl();
+        }
+      });
+
+      // 手动启动/停止
+      startStopBtn.addEventListener("click", () => {
+        if (isVoiceMode) return;
+        isScrolling ? stopScroll() : startScroll();
+      });
+
+      // NEW: 镜像切换
+      mirrorToggleBtn.addEventListener("click", toggleMirroring);
+
+      // 重置按钮
+      resetBtn.addEventListener("click", () => {
+        stopScroll();
+        if (isVoiceMode) stopVoiceControl();
+        resetPosition();
+      });
+
+      function resetPosition() {
+        currentSegmentIndex = 0;
+        display.scrollTop = 0; // 滚动到顶部，让第一个段落可见
+        updateActiveSegment();
+        if (isVoiceMode && scriptSegments.length > 0) {
+          startVoiceControl(); // 如果在语音模式下重置，则重新启动监听
+        }
+      }
+
+      // 输入框内容变化时重新渲染脚本
+      input.addEventListener("input", () => {
+        renderScript();
+        stopScroll(); // 确保修改脚本时停止滚动
+        if (isVoiceMode) stopVoiceControl(); // 确保修改脚本时停止语音模式
+      });
+
+      // 速度变化
+      speedInput.addEventListener("input", () => {
+        speedValue.innerText = speedInput.value;
+        if (isScrolling) {
+          stopScroll();
+          startScroll(); // 立即应用新速度
+        }
+      });
+
+      // 字体变化
+      fontInput.addEventListener("input", () => {
+        fontValue.innerText = `${fontInput.value}px`;
+        document.querySelectorAll(".script-segment").forEach((el) => {
+          el.style.fontSize = `${fontInput.value}px`;
+          // NEW: 确保字体大小变化后，镜像样式保持
+          if (isMirrored) el.style.transform = "scaleX(-1)";
+        });
+        updateActiveSegment(); // 重新居中，防止字体变化导致位置偏移
+      });
+
+      // 文本边距变化 (Horizontal Padding)
+      paddingInput.addEventListener("input", () => {
+        const value = `${paddingInput.value}px`;
+        paddingValue.innerText = value;
+        // 应用 padding 到内容 wrapper
+        display.style.paddingLeft = value;
+        display.style.paddingRight = value;
+      });
+
+      // 段落间距变化 (Vertical Margin)
+      paragraphInput.addEventListener("input", () => {
+        const value = `${paragraphInput.value}px`;
+        paragraphValue.innerText = value;
+        // 应用 margin-bottom 到所有脚本段落
+        document.querySelectorAll(".script-segment").forEach((el) => {
+          el.style.marginBottom = value;
+        });
+      });
+
+      // 行高变化 (Line Height)
+      lineHeightInput.addEventListener("input", () => {
+        const value = lineHeightInput.value;
+        lineHeightValue.innerText = value;
+        // 应用 line-height 到所有脚本段落
+        document.querySelectorAll(".script-segment").forEach((el) => {
+          el.style.lineHeight = value;
+        });
+      });
+
+      // --- 初始化 ---
+
+      window.onload = function () {
+        // 1. 初始化脚本
+        renderScript();
+
+        // 2. 检查语音API
+        checkSpeechApi();
+
+        // 3. 初始化语音识别对象 (但暂时不启动)
+        initSpeechRecognition();
+
+        // 4. 初始化UI状态
+        startStopBtn.disabled = scriptSegments.length === 0;
+
+        // 5. 应用初始文本边距
+        display.style.paddingLeft = `${paddingInput.value}px`;
+        display.style.paddingRight = `${paddingInput.value}px`;
+      };
+    </script>
+  </body>
+</html>
