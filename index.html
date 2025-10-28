@@ -139,9 +139,12 @@
   </head>
   <body class="bg-gray-900 text-gray-100 min-h-screen">
     <div class="container mx-auto p-4 max-w-7xl">
-      <h1 class="text-3xl font-bold text-center mb-6 text-primary">
-        AI智能提词器 🎙️
-      </h1>
+      <!-- NEW: 标题包裹层，用于全屏时隐藏 -->
+      <div id="header-wrapper">
+        <h1 class="text-3xl font-bold text-center mb-6 text-primary">
+          AI智能提词器 🎙️
+        </h1>
+      </div>
 
       <!-- 提词器显示区 -->
       <div
@@ -186,169 +189,175 @@
         </div>
       </div>
 
-      <!-- 状态和提示信息 -->
-      <div
-        id="status-message"
-        class="text-center mt-4 p-2 rounded-lg font-medium text-red-400"
-      >
-        <!-- 状态/错误信息 -->
-      </div>
-
-      <!-- 控制面板 -->
-      <div id="control-panel" class="bg-gray-800 p-4 rounded-xl mt-6 shadow-lg">
-        <div class="flex flex-wrap justify-between items-center gap-4 mb-4">
-          <!-- 模式切换按钮 -->
-          <button
-            id="mode-toggle-btn"
-            class="flex-1 min-w-[120px] px-4 py-2 rounded-lg font-semibold transition duration-200 bg-yellow-600 hover:bg-yellow-500 text-gray-900 shadow-md"
-          >
-            切换到 语音模式
-          </button>
-
-          <!-- NEW: 全屏按钮 -->
-          <button
-            id="fullscreen-btn"
-            class="flex-1 min-w-[120px] px-4 py-2 rounded-lg font-semibold transition duration-200 bg-blue-600 hover:bg-blue-500 text-white shadow-md"
-          >
-            全屏显示
-          </button>
-
-          <!-- NEW: 镜像功能按钮 -->
-          <button
-            id="mirror-toggle-btn"
-            class="flex-1 min-w-[120px] px-4 py-2 rounded-lg font-semibold transition duration-200 bg-gray-600 hover:bg-gray-500 text-white shadow-md"
-          >
-            开启镜像
-          </button>
-
-          <!-- 启动/停止按钮 -->
-          <button
-            id="start-stop-btn"
-            class="flex-1 min-w-[120px] px-4 py-2 rounded-lg font-semibold transition duration-200 bg-green-600 hover:bg-green-500 text-white shadow-md"
-            disabled
-          >
-            启动滚动
-          </button>
-
-          <!-- 重置按钮 -->
-          <button
-            id="reset-btn"
-            class="flex-1 min-w-[120px] px-4 py-2 rounded-lg font-semibold transition duration-200 bg-red-600 hover:bg-red-500 text-white shadow-md"
-          >
-            重置位置
-          </button>
-        </div>
-
-        <!-- Control Row 1: 滚动速度、字体大小、文本边距、段落间距控制 -->
-        <div class="flex flex-wrap justify-start items-center gap-6 mt-4">
-          <!-- 滚动速度控制 -->
-          <div class="w-full sm:w-1/2 lg:w-[23%]">
-            <label
-              for="scroll-speed"
-              class="block text-sm font-medium text-gray-300"
-              >滚动速度 (<span id="speed-value">2</span>)</label
-            >
-            <input
-              type="range"
-              id="scroll-speed"
-              min="0.5"
-              max="5"
-              step="0.5"
-              value="2"
-              class="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
-            />
-          </div>
-
-          <!-- 字体大小控制 -->
-          <div class="w-full sm:w-1/2 lg:w-[23%]">
-            <label
-              for="font-size"
-              class="block text-sm font-medium text-gray-300"
-              >字体大小 (<span id="font-value">48px</span>)</label
-            >
-            <input
-              type="range"
-              id="font-size"
-              min="20"
-              max="96"
-              step="4"
-              value="48"
-              class="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
-            />
-          </div>
-
-          <!-- 文本边距控制 (Horizontal Padding) -->
-          <div class="w-full sm:w-1/2 lg:w-[23%]">
-            <label
-              for="text-padding"
-              class="block text-sm font-medium text-gray-300"
-              >文本边距(左右) (<span id="padding-value">20px</span>)</label
-            >
-            <input
-              type="range"
-              id="text-padding"
-              min="0"
-              max="150"
-              step="5"
-              value="20"
-              class="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
-            />
-          </div>
-
-          <!-- 段落间距控制 (Vertical Margin) -->
-          <div class="w-full sm:w-1/2 lg:w-[23%]">
-            <label
-              for="paragraph-spacing"
-              class="block text-sm font-medium text-gray-300"
-              >段落间距(垂直) (<span id="paragraph-value">20px</span>)</label
-            >
-            <input
-              type="range"
-              id="paragraph-spacing"
-              min="5"
-              max="100"
-              step="5"
-              value="20"
-              class="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
-            />
-          </div>
-        </div>
-
-        <!-- Control Row 2: 行高控制 -->
+      <!-- NEW: 底部控制和状态信息包裹层，用于全屏时隐藏 -->
+      <div id="bottom-controls-wrapper">
+        <!-- 状态和提示信息 -->
         <div
-          class="flex flex-wrap justify-start items-center gap-6 mt-6 pt-4 border-t border-gray-700"
+          id="status-message"
+          class="text-center mt-4 p-2 rounded-lg font-medium text-red-400"
         >
-          <!-- 行高控制 (Line Height) -->
-          <div class="w-full sm:w-1/2 lg:w-[23%]">
-            <label
-              for="line-height-control"
-              class="block text-sm font-medium text-gray-300"
-              >行高 (行内间距) (<span id="line-height-value">1.5</span>)</label
-            >
-            <input
-              type="range"
-              id="line-height-control"
-              min="1.0"
-              max="2.5"
-              step="0.1"
-              value="1.5"
-              class="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
-            />
-          </div>
+          <!-- 状态/错误信息 -->
         </div>
 
-        <!-- 文本输入区, 独立一行 -->
-        <div class="w-full mt-6">
-          <label
-            for="script-input"
-            class="block text-sm font-medium text-gray-300"
-            >演讲稿内容 (段落间请用空行分隔)</label
+        <!-- 控制面板 -->
+        <div
+          id="control-panel"
+          class="bg-gray-800 p-4 rounded-xl mt-6 shadow-lg"
+        >
+          <div class="flex flex-wrap justify-between items-center gap-4 mb-4">
+            <!-- 模式切换按钮 -->
+            <button
+              id="mode-toggle-btn"
+              class="flex-1 min-w-[120px] px-4 py-2 rounded-lg font-semibold transition duration-200 bg-yellow-600 hover:bg-yellow-500 text-gray-900 shadow-md"
+            >
+              切换到 语音模式
+            </button>
+
+            <!-- NEW: 全屏按钮 -->
+            <button
+              id="fullscreen-btn"
+              class="flex-1 min-w-[120px] px-4 py-2 rounded-lg font-semibold transition duration-200 bg-blue-600 hover:bg-blue-500 text-white shadow-md"
+            >
+              全屏显示
+            </button>
+
+            <!-- NEW: 镜像功能按钮 -->
+            <button
+              id="mirror-toggle-btn"
+              class="flex-1 min-w-[120px] px-4 py-2 rounded-lg font-semibold transition duration-200 bg-gray-600 hover:bg-gray-500 text-white shadow-md"
+            >
+              开启镜像
+            </button>
+
+            <!-- 启动/停止按钮 -->
+            <button
+              id="start-stop-btn"
+              class="flex-1 min-w-[120px] px-4 py-2 rounded-lg font-semibold transition duration-200 bg-green-600 hover:bg-green-500 text-white shadow-md"
+              disabled
+            >
+              启动滚动
+            </button>
+
+            <!-- 重置按钮 -->
+            <button
+              id="reset-btn"
+              class="flex-1 min-w-[120px] px-4 py-2 rounded-lg font-semibold transition duration-200 bg-red-600 hover:bg-red-500 text-white shadow-md"
+            >
+              重置位置
+            </button>
+          </div>
+
+          <!-- Control Row 1: 滚动速度、字体大小、文本边距、段落间距控制 -->
+          <div class="flex flex-wrap justify-start items-center gap-6 mt-4">
+            <!-- 滚动速度控制 -->
+            <div class="w-full sm:w-1/2 lg:w-[23%]">
+              <label
+                for="scroll-speed"
+                class="block text-sm font-medium text-gray-300"
+                >滚动速度 (<span id="speed-value">2</span>)</label
+              >
+              <input
+                type="range"
+                id="scroll-speed"
+                min="0.5"
+                max="5"
+                step="0.5"
+                value="2"
+                class="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
+              />
+            </div>
+
+            <!-- 字体大小控制 -->
+            <div class="w-full sm:w-1/2 lg:w-[23%]">
+              <label
+                for="font-size"
+                class="block text-sm font-medium text-gray-300"
+                >字体大小 (<span id="font-value">48px</span>)</label
+              >
+              <input
+                type="range"
+                id="font-size"
+                min="20"
+                max="96"
+                step="4"
+                value="48"
+                class="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
+              />
+            </div>
+
+            <!-- 文本边距控制 (Horizontal Padding) -->
+            <div class="w-full sm:w-1/2 lg:w-[23%]">
+              <label
+                for="text-padding"
+                class="block text-sm font-medium text-gray-300"
+                >文本边距(左右) (<span id="padding-value">20px</span>)</label
+              >
+              <input
+                type="range"
+                id="text-padding"
+                min="0"
+                max="150"
+                step="5"
+                value="20"
+                class="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
+              />
+            </div>
+
+            <!-- 段落间距控制 (Vertical Margin) -->
+            <div class="w-full sm:w-1/2 lg:w-[23%]">
+              <label
+                for="paragraph-spacing"
+                class="block text-sm font-medium text-gray-300"
+                >段落间距(垂直) (<span id="paragraph-value">20px</span>)</label
+              >
+              <input
+                type="range"
+                id="paragraph-spacing"
+                min="5"
+                max="100"
+                step="5"
+                value="20"
+                class="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
+              />
+            </div>
+          </div>
+
+          <!-- Control Row 2: 行高控制 -->
+          <div
+            class="flex flex-wrap justify-start items-center gap-6 mt-6 pt-4 border-t border-gray-700"
           >
-          <!-- 适配横屏和桌面：默认高 6rem (h-24)，中等屏幕以上高 9rem (md:h-36) -->
-          <textarea
-            id="script-input"
-            class="w-full h-24 md:h-36 p-2 mt-1 rounded-lg bg-gray-700 text-gray-200 focus:ring-primary focus:border-primary border border-gray-600"
-          >
+            <!-- 行高控制 (Line Height) -->
+            <div class="w-full sm:w-1/2 lg:w-[23%]">
+              <label
+                for="line-height-control"
+                class="block text-sm font-medium text-gray-300"
+                >行高 (行内间距) (<span id="line-height-value">1.5</span
+                >)</label
+              >
+              <input
+                type="range"
+                id="line-height-control"
+                min="1.0"
+                max="2.5"
+                step="0.1"
+                value="1.5"
+                class="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
+              />
+            </div>
+          </div>
+
+          <!-- 文本输入区, 独立一行 -->
+          <div class="w-full mt-6">
+            <label
+              for="script-input"
+              class="block text-sm font-medium text-gray-300"
+              >演讲稿内容 (段落间请用空行分隔)</label
+            >
+            <!-- 适配横屏和桌面：默认高 6rem (h-24)，中等屏幕以上高 9rem (md:h-36) -->
+            <textarea
+              id="script-input"
+              class="w-full h-24 md:h-36 p-2 mt-1 rounded-lg bg-gray-700 text-gray-200 focus:ring-primary focus:border-primary border border-gray-600"
+            >
 各位观众大家好，欢迎来到今天的分享会。
 信息时代，我们常被数字世界的混乱所困扰。你是不是也常被电脑、手机、网盘里的文件搞得焦头烂额？明明保存过的东西，偏偏急用时翻遍全网都找不到？
 
@@ -362,10 +371,12 @@
 对，就是这么简单！这四个文件夹，涵盖了你数字生活的所有东西。工作任务、个人兴趣，PARA都能帮你分得清清楚楚。
 我自己试了以后，真的有种“救命啊终于找到组织神器”的感觉！试一次，你就知道有多爽！
 感谢大家的收听，期待与你下期再见！peace～
-                </textarea
-          >
+                    </textarea
+            >
+          </div>
         </div>
       </div>
+      <!-- END OF BOTTOM WRAPPER -->
     </div>
 
     <script>
@@ -380,7 +391,11 @@
       let currentSegmentIndex = 0;
 
       // DOM 元素
-      const mainContainer = document.querySelector(".container");
+      // const mainContainer = document.querySelector('.container'); // REMOVED: No longer needed to hide the main container
+      const headerWrapper = document.getElementById("header-wrapper"); // NEW: 标题和控制按钮上部
+      const bottomControlsWrapper = document.getElementById(
+        "bottom-controls-wrapper"
+      ); // NEW: 状态和控制按钮下部
       const display = document.getElementById("script-content-wrapper");
       const input = document.getElementById("script-input");
       const startStopBtn = document.getElementById("start-stop-btn");
@@ -730,9 +745,10 @@
           // 禁用语音模式，防止冲突
           if (isVoiceMode) stopVoiceControl();
 
-          // 隐藏所有非显示区元素
+          // 隐藏所有非显示区元素 (UPDATED)
           document.body.classList.add("overflow-hidden");
-          mainContainer.classList.add("hidden");
+          headerWrapper.classList.add("hidden");
+          bottomControlsWrapper.classList.add("hidden");
 
           // 提词器显示区进入全屏
           document
@@ -749,9 +765,10 @@
           // 更新全屏图标状态
           updateFullscreenIcons();
         } else {
-          // 退出全屏
+          // 退出全屏 (UPDATED)
           document.body.classList.remove("overflow-hidden");
-          mainContainer.classList.remove("hidden");
+          headerWrapper.classList.remove("hidden");
+          bottomControlsWrapper.classList.remove("hidden");
 
           document
             .getElementById("teleprompter-display")
